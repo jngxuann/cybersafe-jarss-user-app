@@ -1852,7 +1852,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           <h1 className="text-3xl font-black text-slate-800" style={{ fontFamily: "Nunito" }}>
             CyberSafe <span className="text-blue-600">Jarss</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Your AI-powered online safety companion</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Your online safety companion</p>
         </motion.div>
 
         {/* Feature pills */}
