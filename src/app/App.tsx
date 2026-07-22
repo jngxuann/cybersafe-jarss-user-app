@@ -904,27 +904,20 @@ async function uploadReportEvidence(
 }
 
 async function submitReport() {
-  if (!category || !platform) {
-    alert("Please select a category and platform.");
-    return;
-  }
+  if (!category || !platform || isSubmitting) return;
 
-  const cat = REPORT_CATEGORIES.find(
-    (c) => c.id === category
-  );
+  setIsSubmitting(true);
+  const cat = REPORT_CATEGORIES.find((c) => c.id === category);
 
   try {
-    // 1. Create the report first
+    // 1. Single database insert
     const { data, error } = await supabase
       .from("reports")
       .insert({
         category: cat?.label ?? category,
         platform,
         description: desc.trim() || "No description provided.",
-
-        // Save the pasted link directly in the reports table
         evidence_link: linkVal.trim() || null,
-
         status: "reviewing",
         ai_summary:
           "We are analysing your report. Pattern matching against known threat signatures and Singapore-specific scam databases. Results expected within 24 hours.",
@@ -934,152 +927,62 @@ async function submitReport() {
       .select()
       .single();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     let screenshotPath: string | null = null;
     let uploadedFilePath: string | null = null;
 
-    // 2. Upload screenshot
+    // 2. Upload screenshot if selected
     if (screenshotFile) {
-      const safeScreenshotName =
-        screenshotFile.name.replace(
-          /[^a-zA-Z0-9._-]/g,
-          "_"
-        );
-
-      screenshotPath =
-        `reports/${data.id}/screenshot-${Date.now()}-${safeScreenshotName}`;
-
-      const { error: screenshotUploadError } =
-        await supabase.storage
-          .from("report-evidence")
-          .upload(
-            screenshotPath,
-            screenshotFile,
-            {
-              cacheControl: "3600",
-              upsert: false,
-              contentType: screenshotFile.type,
-            }
-          );
-
-      if (screenshotUploadError) {
-        throw screenshotUploadError;
-      }
+      const safeScreenshotName = screenshotFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      screenshotPath = `reports/${data.id}/screenshot-${Date.now()}-${safeScreenshotName}`;
+      const { error: ssError } = await supabase.storage
+        .from("report-evidence")
+        .upload(screenshotPath, screenshotFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: screenshotFile.type,
+        });
+      if (ssError) throw ssError;
     }
 
-    // 3. Upload supporting file
+    // 3. Upload file if selected
     if (evidenceFile) {
-      const safeFileName =
-        evidenceFile.name.replace(
-          /[^a-zA-Z0-9._-]/g,
-          "_"
-        );
-
-      uploadedFilePath =
-        `reports/${data.id}/file-${Date.now()}-${safeFileName}`;
-
-      const { error: fileUploadError } =
-        await supabase.storage
-          .from("report-evidence")
-          .upload(
-            uploadedFilePath,
-            evidenceFile,
-            {
-              cacheControl: "3600",
-              upsert: false,
-              contentType: evidenceFile.type,
-            }
-          );
-
-      if (fileUploadError) {
-        throw fileUploadError;
-      }
+      const safeFileName = evidenceFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      uploadedFilePath = `reports/${data.id}/file-${Date.now()}-${safeFileName}`;
+      const { error: fError } = await supabase.storage
+        .from("report-evidence")
+        .upload(uploadedFilePath, evidenceFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: evidenceFile.type,
+        });
+      if (fError) throw fError;
     }
 
-    // 4. Save screenshot and file information in the report row
-    const { data: updatedReport, error: updateError } =
-      await supabase
+    // 4. Update the single existing record with paths (if files were attached)
+    if (screenshotPath || uploadedFilePath) {
+      const { error: updateError } = await supabase
         .from("reports")
         .update({
           screenshot_path: screenshotPath,
-          screenshot_name:
-            screenshotFile?.name ?? null,
-
+          screenshot_name: screenshotFile?.name ?? null,
           file_path: uploadedFilePath,
-          file_name:
-            evidenceFile?.name ?? null,
-          file_type:
-            evidenceFile?.type ?? null,
+          file_name: evidenceFile?.name ?? null,
+          file_type: evidenceFile?.type ?? null,
         })
-        .eq("id", data.id)
-        .select()
-        .single();
+        .eq("id", data.id);
 
-    if (updateError) {
-      throw updateError;
+      if (updateError) throw updateError;
     }
 
-    // 5. Create the local report object
-    const newReport: Report = {
-      id: updatedReport.id,
-      reportNumber:
-        updatedReport.report_number,
-      category:
-        updatedReport.category,
-      platform:
-        updatedReport.platform,
-      desc:
-        updatedReport.description ?? "",
-      date: "Just now",
-      status:
-        updatedReport.status as ReportStatus,
-      aiSummary:
-        updatedReport.ai_summary ?? "",
-      riskLevel:
-        updatedReport.risk_level ?? 0,
-      rewardClaimed:
-        updatedReport.reward_claimed ?? false,
-
-      evidenceLink:
-        updatedReport.evidence_link ?? null,
-      screenshotPath:
-        updatedReport.screenshot_path ?? null,
-      screenshotName:
-        updatedReport.screenshot_name ?? null,
-      filePath:
-        updatedReport.file_path ?? null,
-      fileName:
-        updatedReport.file_name ?? null,
-      fileType:
-        updatedReport.file_type ?? null,
-    };
-
-    console.log("Submitted report:", newReport);
-
-    // 6. Refresh reports and clear the form
     await loadReports();
-
-    setDesc("");
-    setLinkVal("");
-    setScreenshotFile(null);
-    setEvidenceFile(null);
-    setAttachType(null);
-
     setSubmitted(true);
-  } catch (error) {
-    console.error(
-      "Unable to submit report:",
-      error
-    );
-
-    alert(
-      error instanceof Error
-        ? error.message
-        : "Unable to submit the report. Please try again."
-    );
+  } catch (err) {
+    console.error("Unable to submit report:", err);
+    alert("Unable to submit report. Please try again.");
+  } finally {
+    setIsSubmitting(false);
   }
 }
 
@@ -1613,15 +1516,15 @@ if (submitted) {
         type="button"
         whileTap={{ scale: 0.97 }}
         onClick={submitReport}
-        disabled={!category || !platform}
+        disabled={!category || !platform || isSubmitting}
         className={`w-full py-4 rounded-2xl font-black text-base transition-all ${
-          category && platform
+          category && platform && !isSubmitting
             ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-200"
             : "bg-slate-200 text-slate-400 cursor-not-allowed"
         }`}
-    >
-      Submit Report
-    </motion.button>
+      >
+        {isSubmitting ? "Submitting..." : "Submit Report"}
+      </motion.button>
       <p className="text-center text-xs text-slate-400">Reports are submitted anonymously to MHA, IMDA & SPF.</p>
     </div>
   );
@@ -1979,13 +1882,13 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55 }}
-          className="w-full pb-6 flex flex-col"
+          className="w-full pb-6 flex flex-col gap-3"
         >
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleSingpass}
             disabled={loading}
-            className="w-full rounded-2xl font-black text-white text-base h-[50px] flex items-center justify-center gap-3"
+            className="w-full rounded-2xl font-black text-white text-base h-[50px] flex items-center justify-center"
             style={{ background: loading ? "#CBD5E1" : "linear-gradient(135deg,#C0392B 0%,#E74C3C 100%)" }}
           >
             {loading ? (
@@ -1993,7 +1896,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
-                  className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full"
+                  className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full gap-3"
                 />
                 <span>Verifying with Singpass…</span>
               </>
