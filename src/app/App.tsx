@@ -1179,26 +1179,6 @@ if (submitted) {
           <p className="text-sm text-slate-600 leading-relaxed">{r.desc}</p>
         </div>
 
-        {/* AI Risk Summary */}
-        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-4 border border-indigo-100">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center"><span className="text-white text-[10px] font-black">AI</span></div>
-            <span className="font-bold text-indigo-700 text-sm">Risk Summary</span>
-          </div>
-          <p className="text-sm text-slate-700 leading-relaxed mb-3">{r.aiSummary}</p>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500">Risk Level</span>
-            <div className="flex-1 h-2 bg-white rounded-full overflow-hidden border border-slate-100">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${r.riskLevel}%` }} transition={{ duration: 1 }}
-                className="h-full rounded-full"
-                style={{ background: r.riskLevel > 70 ? "#EF4444" : r.riskLevel > 40 ? "#F59E0B" : "#22C55E" }} />
-            </div>
-            <span className={`text-xs font-black ${r.riskLevel > 70 ? "text-red-600" : r.riskLevel > 40 ? "text-amber-600" : "text-green-600"}`}>
-              {r.riskLevel}%
-            </span>
-          </div>
-        </div>
-
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Routed To</p>
           <div className="flex flex-wrap gap-2">
